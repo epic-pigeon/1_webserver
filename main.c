@@ -56,12 +56,14 @@ void http_status(struct http_response *response, int code, const char* desc) {
     char* line;
     asprintf(&line, "HTTP/1.1 %d %s\n", code, desc);
     write(response->connfd, line, strlen(line));
+    free(line);
 }
 
 void http_header(struct http_response *response, const char* name, const char* val) {
     char* line;
     asprintf(&line, "%s: %s\n", name, val);
     write(response->connfd, line, strlen(line));
+    free(line);
 }
 
 void http_data(struct http_response *response, void* buf, int len) {
@@ -71,6 +73,7 @@ void http_data(struct http_response *response, void* buf, int len) {
         }
         void* newbuf = malloc(response->databuf_size);
         memcpy(newbuf, response->databuf, response->data_size);
+        free(response->databuf);
         response->databuf = newbuf;
     }
     memcpy(response->databuf + response->data_size, buf, len);
@@ -81,9 +84,12 @@ void http_close(struct http_response *response) {
     char* line;
     asprintf(&line, "Content-Length: %d\n\n", response->data_size);
     write(response->connfd, line, strlen(line));
+    free(line);
     write(response->connfd, response->databuf, response->data_size);
-    LOG("HTTP", "close %d", response->connfd);
+    LOG("HTTP", "close %d", response->connfd)
     close(response->connfd);
+    free(response->databuf);
+    free(response);
 }
 
 typedef void (*server_socket_callback)(const struct socket_listener_args *);
@@ -165,6 +171,7 @@ int socket_listener(const struct socket_listener_args* args) {
             size *= 2;
             char* new_data = malloc(size + 1);
             memcpy(new_data, data, size/2);
+            free(data);
             data = new_data;
         }
         read_ptr += read_size;
@@ -247,7 +254,15 @@ int socket_listener(const struct socket_listener_args* args) {
         headers[i].value = value;
     }
     LOG("SOCK", "Invoke http listener", 0)
-    return args->listener(method, url, protocol, headers, line_ptr-1, new_http_response(connfd));
+    int res = args->listener(method, url, protocol, headers, line_ptr-1, new_http_response(connfd));
+    free(method);
+    free(url);
+    free(protocol);
+    for (int i = 0; i < line_ptr-1; i++) {
+        free(headers[i].name);
+        free(headers[i].value);
+    }
+    free(headers);
     close_socket:
     close(connfd);
     LOG("SOCK", "Close socket %d", id)
@@ -278,6 +293,7 @@ int my_http_listener(const char *method, const char *url, const char *protocol,
     }
     LOG("HTTP", "http request: %s", reply)
     //write(connfd, reply, end);
+    free(reply);
     char* path;
     asprintf(&path, "%s%s", base_path, url);
     LOG("HTTP", "open %s", path)
@@ -298,6 +314,7 @@ int my_http_listener(const char *method, const char *url, const char *protocol,
         asprintf(&errmsg, "%s: %s", "File open error", strerror(errno));
         LOG("HTTP", "Error: %s", errmsg)
         http_data(response, errmsg, strlen(errmsg));
+        free(errmsg);
     }
     http_close(response);
     return 0;
