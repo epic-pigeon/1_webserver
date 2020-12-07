@@ -81,11 +81,13 @@ void http_data(struct http_response *response, void* buf, int len) {
 }
 
 void http_close(struct http_response *response) {
-    char* line;
-    asprintf(&line, "Content-Length: %d\n\n", response->data_size);
-    write(response->connfd, line, strlen(line));
-    free(line);
-    write(response->connfd, response->databuf, response->data_size);
+    if (response->data_size > 0) {
+        char *line;
+        asprintf(&line, "Content-Length: %d\n\n", response->data_size);
+        write(response->connfd, line, strlen(line));
+        free(line);
+        write(response->connfd, response->databuf, response->data_size);
+    }
     LOG("HTTP", "close %d", response->connfd)
     close(response->connfd);
     free(response->databuf);
@@ -309,11 +311,11 @@ int my_http_listener(const char *method, const char *url, const char *protocol,
         }
         free(buf);
     } else {
-        http_status(response, 403, "Forbidden");
+        http_status(response, 404, "Not found");
         char* errmsg;
         asprintf(&errmsg, "%s: %s", "File open error", strerror(errno));
         LOG("HTTP", "Error: %s", errmsg)
-        http_data(response, errmsg, strlen(errmsg));
+        //http_data(response, errmsg, strlen(errmsg));
         free(errmsg);
     }
     http_close(response);
