@@ -331,7 +331,6 @@ int main(int argc, char** argv) {
     pthread_t tid;
     int res = start_http_server(&tid, my_http_listener, 8080, 10);
     if (res) error("Socket process error", res);
-    printf("Hello, World!\n");
     int *err = malloc(sizeof(int));
     pthread_join(tid, &err);
     if (*err) {
